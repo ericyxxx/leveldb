@@ -1,16 +1,18 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-//
+
+// [sequence 8Bytes][count 4Bytes][data]
+
 // WriteBatch::rep_ :=
 //    sequence: fixed64
 //    count: fixed32
 //    data: record[count]
 // record :=
-//    kTypeValue varstring varstring         |
-//    kTypeDeletion varstring
+//    tag:kTypeValue  varstring varstring         |
+//    tag:kTypeDeletion  varstring
 // varstring :=
-//    len: varint32
+//    len: varint32  先取长度再取value
 //    data: uint8[len]
 
 #include "leveldb/write_batch.h"
@@ -111,7 +113,8 @@ void WriteBatch::Delete(const Slice& key) {
 void WriteBatch::Append(const WriteBatch& source) {
   WriteBatchInternal::Append(this, &source);
 }
-
+//在WriteBatch::Iterate中真正dump到memtable时,每一条记录的sequence是单调递增的，
+//所以写入的writebatch中的sequence_只是写入的基准sequence
 namespace {
 class MemTableInserter : public WriteBatch::Handler {
  public:
@@ -129,13 +132,16 @@ class MemTableInserter : public WriteBatch::Handler {
 };
 }  // namespace
 
+//把WriteBatch插入memtable
+//在DBImpl最上层类中，当插入数据时，先是调用WriteBatch的put(增加)和delete(删除)方法将记录添加进rep_，
+//然后调用WriteBatchInternal:InsertInto方法写入memtable
 Status WriteBatchInternal::InsertInto(const WriteBatch* b, MemTable* memtable) {
   MemTableInserter inserter;
   inserter.sequence_ = WriteBatchInternal::Sequence(b);
   inserter.mem_ = memtable;
   return b->Iterate(&inserter);
 }
-
+//WriteBatch直接
 void WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
   assert(contents.size() >= kHeader);
   b->rep_.assign(contents.data(), contents.size());
@@ -148,3 +154,5 @@ void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src) {
 }
 
 }  // namespace leveldb
+//参考
+//https://www.huliujia.com/blog/3c240f2a7b/

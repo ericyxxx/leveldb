@@ -181,8 +181,11 @@ struct SkipList<Key, Comparator>::Node {
 template <typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
     const Key& key, int height) {
+  // char * const ptr 表示char*指针不可修改 内容可修改 ptr是const
+  // char const * ptr/const char * ptr表示char*指针内容不可修改 *ptr是const 
   char* const node_memory = arena_->AllocateAligned(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
+  //基于地址指针空间的new分配 c++ placement new [new (char * ptr) Obj() ]
   return new (node_memory) Node(key);
 }
 
@@ -359,6 +362,7 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
   }
 
   x = NewNode(key, height);
+  //从最底层更新
   for (int i = 0; i < height; i++) {
     // NoBarrier_SetNext() suffices since we will add a barrier when
     // we publish a pointer to "x" in prev[i].
