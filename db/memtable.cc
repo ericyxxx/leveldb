@@ -30,6 +30,7 @@ int MemTable::KeyComparator::operator()(const char* aptr,
   // Internal keys are encoded as length-prefixed strings.
   Slice a = GetLengthPrefixedSlice(aptr);
   Slice b = GetLengthPrefixedSlice(bptr);
+  //只取了前4个字节比较是为何？
   return comparator.Compare(a, b);
 }
 
@@ -73,6 +74,7 @@ class MemTableIterator : public Iterator {
 
 Iterator* MemTable::NewIterator() { return new MemTableIterator(&table_); }
 
+//序号 + 类型（add/delete） + key + value
 void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
                    const Slice& value) {
   // Format of an entry is concatenation of:
@@ -86,16 +88,23 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   const size_t encoded_len = VarintLength(internal_key_size) +
                              internal_key_size + VarintLength(val_size) +
                              val_size;
+                             //为何此处仅对长度字段进行varint编码？
   char* buf = arena_.Allocate(encoded_len);
+  // *buf
   char* p = EncodeVarint32(buf, internal_key_size);
   std::memcpy(p, key.data(), key_size);
   p += key_size;
+  //seq实际上只存了56位，让了最低8位给type字段
   EncodeFixed64(p, (s << 8) | type);
   p += 8;
   p = EncodeVarint32(p, val_size);
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
+
+  //| keysize(varint32) | key | seq（56） + type（8） (这就是internal_key_size多分配的8bytes) | valuelength(varint) | value|
   table_.Insert(buf);
+  //table就是一个跳表 整条记录插入跳表
+
 }
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {

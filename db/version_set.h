@@ -106,6 +106,7 @@ class Version {
 
   // Return the level at which we should place a new memtable compaction
   // result that covers the range [smallest_user_key,largest_user_key].
+  // 为刚从 memtable 持久化的 sstable，选择一个合适的 level.
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
 
@@ -151,7 +152,7 @@ class Version {
   int refs_;          // Number of live refs to this version
 
   // List of files per level
-  std::vector<FileMetaData*> files_[config::kNumLevels];
+  std::vector<FileMetaData*> files_[config::kNumLevels];//表示每一层的全部 sstable 文件。
 
   // Next file to compact based on seek stats.
   FileMetaData* file_to_compact_;

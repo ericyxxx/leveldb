@@ -9,7 +9,7 @@
 #include "table/iterator_wrapper.h"
 
 namespace leveldb {
-
+//合并k链表 
 namespace {
 class MergingIterator : public Iterator {
  public:
@@ -20,6 +20,7 @@ class MergingIterator : public Iterator {
         current_(nullptr),
         direction_(kForward) {
     for (int i = 0; i < n; i++) {
+      // 生成n个IteratorWrapper变量 - 然后把children里面的n个Iterator依次赋值给children_[i]
       children_[i].Set(children[i]);
     }
   }
@@ -51,7 +52,9 @@ class MergingIterator : public Iterator {
     FindSmallest();
     direction_ = kForward;
   }
-
+  
+// 如果移动方向是kReverse，那么需要把除current_之外的iterator都seek到比key()大的地方
+// 移动current_->Next()
   void Next() override {
     assert(Valid());
 
@@ -60,6 +63,16 @@ class MergingIterator : public Iterator {
     // true for all of the non-current_ children since current_ is
     // the smallest child and key() == current_->key().  Otherwise,
     // we explicitly position the non-current_ children.
+    // 这里需要确保所有的children都已经移动到了小于key()的地方！
+    // 如果移动方向是forward即前向移动，那么
+    // 因为current_已经是最小的children了，所有后面的Iterator的key
+    // 肯定比当前key()大。
+    // 否则，也就是说，当移动方向不是kForward的时候，需要显式操作non-current_
+
+    // 这里这么多废话的主要原因是：
+    // next()是只能前向移动，也就是找到一个比key()大的key()
+    // 那么，如果移动方向不是前向的，就需要seek(key())
+    // 然后再移动到刚好比key()大的地方
     if (direction_ != kForward) {
       for (int i = 0; i < n_; i++) {
         IteratorWrapper* child = &children_[i];
@@ -130,6 +143,10 @@ class MergingIterator : public Iterator {
 
  private:
   // Which direction is the iterator moving?
+  // 由于提供的是一个数组，那么在扫描数组的时候，可以从头向前扫描，也可以从后面向前扫描。
+  // 所以需要指定一个方向，这就是为什么会有一个方向定义的原因。
+
+
   enum Direction { kForward, kReverse };
 
   void FindSmallest();
@@ -139,13 +156,23 @@ class MergingIterator : public Iterator {
   // For now we use a simple array since we expect a very small number
   // of children in leveldb.
   const Comparator* comparator_;
+  // IteratorWrapper与Iterator本质上是差不多的。
+  // 只是对以下内容做了一个缓存。
+  // - key
+  // - valid
+  // 为了加速存取
   IteratorWrapper* children_;
   int n_;
+  // children的Iterator的长度
   IteratorWrapper* current_;
   Direction direction_;
+  // 向哪个方向移动?
+  // 这里定义两个移动的方向
 };
 
+// 在一堆迭代器中找到最小的那个 遍历
 void MergingIterator::FindSmallest() {
+  // 一开始最小的设置为空
   IteratorWrapper* smallest = nullptr;
   for (int i = 0; i < n_; i++) {
     IteratorWrapper* child = &children_[i];
@@ -159,7 +186,7 @@ void MergingIterator::FindSmallest() {
   }
   current_ = smallest;
 }
-
+// 在一堆迭代器中找到最大的那个 遍历
 void MergingIterator::FindLargest() {
   IteratorWrapper* largest = nullptr;
   for (int i = n_ - 1; i >= 0; i--) {

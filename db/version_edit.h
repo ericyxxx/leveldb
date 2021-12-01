@@ -97,7 +97,7 @@ class VersionEdit {
   bool has_last_sequence_;
 
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
-  DeletedFileSet deleted_files_;
+  DeletedFileSet deleted_files_; //待删除文件
   std::vector<std::pair<int, FileMetaData>> new_files_;
 };
 

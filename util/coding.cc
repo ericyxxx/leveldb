@@ -74,6 +74,12 @@ void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   dst->append(value.data(), value.size());
 }
 
+//计算v占用varint编码长度
+//每128（0x1000 0000）间隔划分
+//小于128 结束 大于128 存一个字节
+//大于128 说明改字节首位一定是1，表示该数字还未结束
+// >如果该位为 1，表示后续的字节也是该整型数据的一部分
+// >如果该位为 0，表示结束，当前字节的剩余 7 位就是该数据的表示。
 int VarintLength(uint64_t v) {
   int len = 1;
   while (v >= 128) {

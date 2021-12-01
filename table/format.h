@@ -19,7 +19,10 @@ class RandomAccessFile;
 struct ReadOptions;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
-// block or a meta block.
+//    !!!! block or a meta block.
+//    查找任意一个 block 数据块，都需要两条数据：offset && size.起到 handle block 作用，称为BlockHandle，支持序列化和反序列化。
+//    BlockHandle 只记录 offset && size.
+//    |varint64(offset)  |varint64(size)  |
 class BlockHandle {
  public:
   // Maximum encoding length of a BlockHandle
@@ -34,7 +37,8 @@ class BlockHandle {
   // The size of the stored block
   uint64_t size() const { return size_; }
   void set_size(uint64_t size) { size_ = size; }
-
+  
+  //EncodeTo就是把 offset && size 序列化到 value，实际上就是两次 varint.DecodeFrom是其逆过程。
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* input);
 

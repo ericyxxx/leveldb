@@ -161,7 +161,12 @@ class Block::Iter : public Iterator {
     } while (ParseNextKey() && NextEntryOffset() < original);
   }
 
+
+  //1. 二分查找查restart point
+  //2. 线性遍历直至找到key(第一个>=key的slice)
+
   void Seek(const Slice& target) override {
+    // 第一步
     // Binary search in restart array to find the last restart point
     // with a key < target
     uint32_t left = 0;
@@ -210,6 +215,7 @@ class Block::Iter : public Iterator {
     // We might be able to use our current position within the restart block.
     // This is true if we determined the key we desire is in the current block
     // and is after than the current key.
+    // 第二步
     assert(current_key_compare == 0 || Valid());
     bool skip_seek = left == restart_index_ && current_key_compare < 0;
     if (!skip_seek) {

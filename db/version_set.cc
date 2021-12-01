@@ -467,6 +467,11 @@ bool Version::OverlapInLevel(int level, const Slice* smallest_user_key,
                                smallest_user_key, largest_user_key);
 }
 
+// 找一个合适的level放置新从memtable dump出的sstable
+// 注：不一定总是放到level 0，尽量放到更大的level
+// 如果[small, large]与0层有重叠，则直接返回0
+// 如果与level + 1文件有重叠，或者与level + 2层文件重叠过大，则都不应该放入level + 1，直接返回level
+// 返回的level 最大为2
 int Version::PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                         const Slice& largest_user_key) {
   int level = 0;
@@ -566,6 +571,7 @@ std::string Version::DebugString() const {
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
+// Builder是一个辅助类，实现Version + VersionEdit = Version'的功能
 class VersionSet::Builder {
  private:
   // Helper to sort by v->files_[file_number].smallest
@@ -591,7 +597,7 @@ class VersionSet::Builder {
 
   VersionSet* vset_;
   Version* base_;
-  LevelState levels_[config::kNumLevels];
+  LevelState levels_[config::kNumLevels];//每一层的新增及删除文件
 
  public:
   // Initialize a builder with the files from *base and other info from *vset
@@ -628,6 +634,7 @@ class VersionSet::Builder {
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
     // Update compaction pointers
+    // compact_pointers_ 主要用于 major compact 时选择文件
     for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
       const int level = edit->compact_pointers_[i].first;
       vset_->compact_pointer_[level] =
@@ -642,6 +649,7 @@ class VersionSet::Builder {
     }
 
     // Add new files
+    // 记录新增文件到added_files，并计算该文件的allowed_seeks(用于触发compact)
     for (size_t i = 0; i < edit->new_files_.size(); i++) {
       const int level = edit->new_files_[i].first;
       FileMetaData* f = new FileMetaData(edit->new_files_[i].second);

@@ -7,13 +7,27 @@
 #include "leveldb/filter_policy.h"
 #include "util/coding.h"
 
+// 可以参考 https://izualzhy.cn/filter-block
+
+// 在 leveldb 中，查找 data block使用二分法（block.cc），能够达到 lg(n) 的复杂度，
+// 如果想进一步提高，就需要用到 filter block 了。
+
+// 如果说 data block 的作用是查找 key 对应的 value，那么 filter block 则是查找 key 是否存在于该 data block，
+// 起到提前过滤的作用，这也是 filter block 名字的由来。
+
+// filter block的想法其实很简单，就是拿空间换时间，例如我们可以构造 data block 内所有 key 的 hash table，
+// 将hash table对应的序列化数据存储到 fitler block.
+// leveldb 并没有直接这么做，而是采用了 bloom filter，
+// 在达到O(1)的前提下，用一个巧妙的办法使用了更少的空间。
+
 namespace leveldb {
 
 // See doc/table_format.md for an explanation of the filter block format.
 
-// Generate new filter every 2KB of data
+// Generate new filter every 2KB of data 决定了2的数组元素个数，默认为11，即0x0b.
 static const size_t kFilterBaseLg = 11;
 static const size_t kFilterBase = 1 << kFilterBaseLg;
+//FilterBlockBuilder 仅组织数据格式
 
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {}

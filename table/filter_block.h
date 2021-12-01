@@ -5,7 +5,9 @@
 // A filter block is stored near the end of a Table file.  It contains
 // filters (e.g., bloom filters) for all data blocks in the table combined
 // into a single filter block.
-
+// 过滤器块存储在表文件末尾附近。它包含了
+// 组合表中所有数据块的过滤器（例如布隆过滤器）
+// 成一个过滤块。
 #ifndef STORAGE_LEVELDB_TABLE_FILTER_BLOCK_H_
 #define STORAGE_LEVELDB_TABLE_FILTER_BLOCK_H_
 
@@ -57,8 +59,8 @@ class FilterBlockReader {
 
  private:
   const FilterPolicy* policy_;
-  const char* data_;    // Pointer to filter data (at block-start)
-  const char* offset_;  // Pointer to beginning of offset array (at block-end)
+  const char* data_;    // Pointer to filter data (at block-start) 
+  const char* offset_;  // Pointer to beginning of offset array (at block-end) 
   size_t num_;          // Number of entries in offset array
   size_t base_lg_;      // Encoding parameter (see kFilterBaseLg in .cc file)
 };

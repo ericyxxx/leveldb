@@ -181,6 +181,12 @@ inline bool ParseInternalKey(const Slice& internal_key,
 }
 
 // A helper class useful for DBImpl::Get()
+// 把用户的key 封装成 （varint32_keylength + key + seq + type ）格式 
+// 提供各种key类型获取方式：
+// memtable_key跳表key（varint32_keylength + key + seq + type）
+// internal_key （key + seq + type）
+// user_key (key)
+
 class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
@@ -213,6 +219,7 @@ class LookupKey {
   const char* kstart_;
   const char* end_;
   char space_[200];  // Avoid allocation for short keys
+  // ATTENTION 最大200个char
 };
 
 inline LookupKey::~LookupKey() {

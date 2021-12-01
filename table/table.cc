@@ -132,16 +132,22 @@ void Table::ReadFilter(const Slice& filter_handle_value) {
 }
 
 Table::~Table() { delete rep_; }
-
+// 三个可以注册的清理func，用来回收内存
+// Table::BlockReader()会在iterator中设置好相应的回调函数，放到Iterator基类的std::list<回调函数>双向链表中去。
+// 一个Iterator在析构的时候，会去调用基类的析构函数。
+// 如果这个Block要析的时候，没有在cache中，那么直接删除。
+// 如果这个Block已经被加到了cache中，那么减少cache的引用计算数。
+// 当cache中的block引用计数变成0的时候，也需要调用相应的回调函数。
+// 删除一个block
 static void DeleteBlock(void* arg, void* ignored) {
   delete reinterpret_cast<Block*>(arg);
 }
-
+// 删除相应的cache
 static void DeleteCachedBlock(const Slice& key, void* value) {
   Block* block = reinterpret_cast<Block*>(value);
   delete block;
 }
-
+// 释放一次cache的引用
 static void ReleaseBlock(void* arg, void* h) {
   Cache* cache = reinterpret_cast<Cache*>(arg);
   Cache::Handle* handle = reinterpret_cast<Cache::Handle*>(h);

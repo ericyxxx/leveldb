@@ -516,6 +516,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
+      //更新memtable中全部数据到xxx.ldb文件
+    //meta记录key range, file_size等sst信息
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
@@ -534,7 +536,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
+      // PickLevelForMemTableOutput是Version的接口，后续笔记专门介绍 leveldb 的版本，
+      // 这里的作用就是返回一个该 sstable 即将放入的 level，加上meta里的文件信息，统一记录到edit.
     }
+     //level及file meta记录到edit
     edit->AddFile(level, meta.number, meta.file_size, meta.smallest,
                   meta.largest);
   }
@@ -546,6 +551,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
+
+// WriteLevel0Table(imm_, &edit, base)：imm_落盘成为新的 sst 文件，文件信息记录到 edit
+// versions_->LogAndApply(&edit, &mutex_)：将本次文件更新信息versions_，当前的文件（包含新的 sst 文件）作为数据库的一个最新状态，后续读写都会基于该状态
+// RemoveObsoleteFiles：删除一些无用文件
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -565,7 +574,7 @@ void DBImpl::CompactMemTable() {
   if (s.ok()) {
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
-    s = versions_->LogAndApply(&edit, &mutex_);
+    s = versions_->LogAndApply(&edit, &mutex_);//将edit应用到版本信息里记录
   }
 
   if (s.ok()) {
@@ -699,14 +708,17 @@ void DBImpl::BackgroundCall() {
   background_work_finished_signal_.SignalAll();
 }
 
+
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
   if (imm_ != nullptr) {
     CompactMemTable();
+    //如果immutable memtable存在，则本次先compact，即Minor Compaction
     return;
   }
 
+   // major compaction（主合并） 优先级低于minor compaction（副合并）
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
@@ -1353,13 +1365,16 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
+      //imm_ 还在 Compact 中，如果是就等待 Compact 完成（条件变量）
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
+      // level-0 最大12个 超过则不写等待Compact
       // There are too many level-0 files.
       Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
+      //PrevLogNumber 0 or backing store for memtable being compacted,  
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);

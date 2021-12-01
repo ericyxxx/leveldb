@@ -12,7 +12,13 @@
 // restart points, and can be used to do a binary search when looking
 // for a particular key.  Values are stored as-is (without compression)
 // immediately following the corresponding key.
-//
+
+// 省略前缀节约了空间，但就无法方便地执行二分查找了。LevelDB 的解决方案是每隔 K=16 个键值队设定一个复活点
+// 复活点上将完整存储键、不进行前缀共享。
+// 每次查询都需要二分找到复活点，找到待查询点前面最近的复活点（即 <= key），按需依次恢复后续的key直至匹配
+
+// 牺牲部分查询性能 且复活点间隔不宜太大，优点是兼顾二分查询 且节省空间
+
 // An entry for a particular key-value pair has the form:
 //     shared_bytes: varint32
 //     unshared_bytes: varint32
@@ -25,6 +31,14 @@
 //     restarts: uint32[num_restarts]
 //     num_restarts: uint32
 // restarts[i] contains the offset within the block of the ith restart point.
+
+// shared_bytes: varint32           # Key 与上一个键共享的长度
+// unshared_bytes: varint32         # Key 非共享长度
+// value_length: varint32           # Value 的长度
+// key_delta: char[unshared_bytes]  # Key 非共享部分
+// value: char[value_length]        # Value
+
+// 参考 https://izualzhy.cn/leveldb-block 
 
 #include "table/block_builder.h"
 
@@ -58,6 +72,7 @@ size_t BlockBuilder::CurrentSizeEstimate() const {
           sizeof(uint32_t));                     // Restart array length
 }
 
+//在 buffer 后追加 restart_ 数组里的全部元素及数组大小。
 Slice BlockBuilder::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {
@@ -81,6 +96,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
     while ((shared < min_length) && (last_key_piece[shared] == key[shared])) {
       shared++;
     }
+    //计算共同的key长度
   } else {
     // Restart compression
     restarts_.push_back(buffer_.size());
@@ -89,10 +105,11 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   const size_t non_shared = key.size() - shared;
 
   // Add "<shared><non_shared><value_size>" to buffer_
-  PutVarint32(&buffer_, shared);
-  PutVarint32(&buffer_, non_shared);
+  PutVarint32(&buffer_, shared); //长度
+  PutVarint32(&buffer_, non_shared);//长度
   PutVarint32(&buffer_, value.size());
-
+  //<shared><non_shared><value_size><non_shared key><value>
+  
   // Add string delta to buffer_ followed by value
   buffer_.append(key.data() + shared, non_shared);
   buffer_.append(value.data(), value.size());

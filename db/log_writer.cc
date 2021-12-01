@@ -41,23 +41,23 @@ Status Writer::AddRecord(const Slice& slice) {
   Status s;
   bool begin = true;
   do {
-    const int leftover = kBlockSize - block_offset_;
+    const int leftover = kBlockSize - block_offset_; //计算block剩余空间
     assert(leftover >= 0);
     if (leftover < kHeaderSize) {
       // Switch to a new block
       if (leftover > 0) {
         // Fill the trailer (literal below relies on kHeaderSize being 7)
         static_assert(kHeaderSize == 7, "");
-        dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover));
+        dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover)); //header的容量都不够就直接写\x00填充
       }
-      block_offset_ = 0;
+      block_offset_ = 0;//换一个新的block 重置偏移量
     }
 
     // Invariant: we never leave < kHeaderSize bytes in a block.
-    assert(kBlockSize - block_offset_ - kHeaderSize >= 0);
+    assert(kBlockSize - block_offset_ - kHeaderSize >= 0);//确保至少header能写入
 
     const size_t avail = kBlockSize - block_offset_ - kHeaderSize;
-    const size_t fragment_length = (left < avail) ? left : avail;
+    const size_t fragment_length = (left < avail) ? left : avail; //slice中可写入当前block的长度
 
     RecordType type;
     const bool end = (left == fragment_length);
@@ -72,8 +72,8 @@ Status Writer::AddRecord(const Slice& slice) {
     }
 
     s = EmitPhysicalRecord(type, ptr, fragment_length);
-    ptr += fragment_length;
-    left -= fragment_length;
+    ptr += fragment_length; //指向slice待写入地址
+    left -= fragment_length; //slice剩下待写入长度
     begin = false;
   } while (s.ok() && left > 0);
   return s;
@@ -97,12 +97,15 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
 
   // Write the header and the payload
   Status s = dest_->Append(Slice(buf, kHeaderSize));
+  //先append header
   if (s.ok()) {
     s = dest_->Append(Slice(ptr, length));
+    //再append data
     if (s.ok()) {
       s = dest_->Flush();
     }
   }
+  //TODO : 如果失败怎么处理呢？写入失败 但是offset已经改了，这个空间就直接丢弃吗？
   block_offset_ += kHeaderSize + length;
   return s;
 }
